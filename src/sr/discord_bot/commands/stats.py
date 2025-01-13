@@ -10,7 +10,7 @@ from sr.discord_bot.constants import VOLUNTEER_ROLE
 if TYPE_CHECKING:
     from sr.discord_bot.bot import BotClient
 
-SUBSCRIBE_MSG_FILE = 'subscribed_messages.json'
+SUBSCRIBE_MSG_FILE = "subscribed_messages.json"
 
 
 class SubscribedMessage(NamedTuple):
@@ -23,17 +23,14 @@ class SubscribedMessage(NamedTuple):
     stats: bool = False
 
     @classmethod
-    def load(cls, dct: Dict[str, Any]) -> 'SubscribedMessage':  # type:ignore[misc]
+    def load(cls, dct: Dict[str, Any]) -> "SubscribedMessage":  # type:ignore[misc]
         """Load a SubscribedMessage object from a dictionary."""
         return cls(**dct)
 
     def __eq__(self, comp: object) -> bool:
         if not isinstance(comp, SubscribedMessage):
             return False
-        return (
-            self.channel_id == comp.channel_id
-            and self.message_id == comp.message_id
-        )
+        return self.channel_id == comp.channel_id and self.message_id == comp.message_id
 
 
 @app_commands.guild_only()
@@ -43,11 +40,11 @@ class Stats(app_commands.Group):
         super().__init__(description="Posts team member statistics")
 
 
-@app_commands.command(name='post')  # type:ignore[arg-type]
+@app_commands.command(name="post")  # type:ignore[arg-type]
 @app_commands.describe(
-    members='Display the number of members in each team',
-    warnings='Display warnings about missing supervisors and empty teams',
-    stats='Display statistics about the teams',
+    members="Display the number of members in each team",
+    warnings="Display warnings about empty teams",
+    stats="Display statistics about the teams",
 )
 @app_commands.checks.has_role(VOLUNTEER_ROLE)
 async def post_stats(
@@ -65,11 +62,11 @@ async def post_stats(
     await send_response(ctx, message)
 
 
-@discord.app_commands.command(name='subscribe')  # type:ignore[arg-type]
+@discord.app_commands.command(name="subscribe")  # type:ignore[arg-type]
 @app_commands.describe(
-    members='Display the number of members in each team',
-    warnings='Display warnings about missing supervisors and empty teams',
-    stats='Display statistics about the teams',
+    members="Display the number of members in each team",
+    warnings="Display warnings about empty teams",
+    stats="Display statistics about the teams",
 )
 @app_commands.checks.has_role(VOLUNTEER_ROLE)
 async def stats_subscribe(
@@ -87,17 +84,19 @@ async def stats_subscribe(
     bot_message = await send_response(ctx, message)
     if bot_message is None:
         return
-    ctx.client.add_subscribed_message(SubscribedMessage(
-        bot_message.channel.id,
-        bot_message.id,
-        members,
-        warnings,
-        stats,
-    ))
+    ctx.client.add_subscribed_message(
+        SubscribedMessage(
+            bot_message.channel.id,
+            bot_message.id,
+            members,
+            warnings,
+            stats,
+        )
+    )
 
 
 async def send_response(
-    ctx: discord.interactions.Interaction['BotClient'],
+    ctx: discord.interactions.Interaction["BotClient"],
     message: str,
 ) -> discord.Message | None:
     """Respond to an interaction and return the bot's message object."""
@@ -105,21 +104,23 @@ async def send_response(
         await ctx.response.send_message(f"```\n{message}\n```")
         bot_message = await ctx.original_response()
     except discord.NotFound as e:
-        print('Unable to find original message')
+        print("Unable to find original message")
         print(e)
     except (discord.HTTPException, discord.ClientException) as e:
-        print('Unable to connect to discord server')
+        print("Unable to connect to discord server")
         print(e)
     else:
         return bot_message
     return None
 
 
-def load_subscribed_messages(client: 'BotClient') -> None:
+def load_subscribed_messages(client: "BotClient") -> None:
     """Load subscribed message details from file."""
     try:
         with open(SUBSCRIBE_MSG_FILE) as f:
-            client.subscribed_messages = json.load(f, object_hook=SubscribedMessage.load)
+            client.subscribed_messages = json.load(
+                f, object_hook=SubscribedMessage.load
+            )
     except (json.JSONDecodeError, FileNotFoundError):
-        with open(SUBSCRIBE_MSG_FILE, 'w') as f:
-            f.write('[]')
+        with open(SUBSCRIBE_MSG_FILE, "w") as f:
+            f.write("[]")

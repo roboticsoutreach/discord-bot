@@ -15,7 +15,6 @@ from sr.discord_bot.constants import (
     VERIFIED_ROLE,
     CHANNEL_PREFIX,
     VOLUNTEER_ROLE,
-    TEAM_LEADER_ROLE,
     FEED_CHANNEL_NAME,
     FEED_CHECK_INTERVAL,
     ANNOUNCE_CHANNEL_NAME,
@@ -49,7 +48,6 @@ class BotClient(discord.Client):
     verified_role: discord.Role
     special_role: discord.Role
     volunteer_role: discord.Role
-    supervisor_role: discord.Role
     welcome_category: discord.CategoryChannel
     announce_channel: discord.TextChannel
     passwords: dict[str, str]
@@ -67,7 +65,7 @@ class BotClient(discord.Client):
         super().__init__(loop=loop, intents=intents)
         self.logger = logger
         self.tree = app_commands.CommandTree(self)
-        guild_id = os.getenv('DISCORD_GUILD_ID')
+        guild_id = os.getenv("DISCORD_GUILD_ID")
         if guild_id is None or not guild_id.isnumeric():
             self.logger.error("Invalid guild ID")
             exit(1)
@@ -107,16 +105,18 @@ class BotClient(discord.Client):
         verified_role = discord.utils.get(guild.roles, name=VERIFIED_ROLE)
         special_role = discord.utils.get(guild.roles, name=SPECIAL_ROLE)
         volunteer_role = discord.utils.get(guild.roles, name=VOLUNTEER_ROLE)
-        supervisor_role = discord.utils.get(guild.roles, name=TEAM_LEADER_ROLE)
-        welcome_category = discord.utils.get(guild.categories, name=WELCOME_CATEGORY_NAME)
-        announce_channel = discord.utils.get(guild.text_channels, name=ANNOUNCE_CHANNEL_NAME)
+        welcome_category = discord.utils.get(
+            guild.categories, name=WELCOME_CATEGORY_NAME
+        )
+        announce_channel = discord.utils.get(
+            guild.text_channels, name=ANNOUNCE_CHANNEL_NAME
+        )
         feed_channel = discord.utils.get(guild.text_channels, name=FEED_CHANNEL_NAME)
 
         if (
             verified_role is None
             or special_role is None
             or volunteer_role is None
-            or supervisor_role is None
             or welcome_category is None
             or announce_channel is None
             or feed_channel is None
@@ -127,12 +127,11 @@ class BotClient(discord.Client):
             self.verified_role = verified_role
             self.special_role = special_role
             self.volunteer_role = volunteer_role
-            self.supervisor_role = supervisor_role
             self.welcome_category = welcome_category
             self.announce_channel = announce_channel
             self.feed_channel = feed_channel
 
-        self.teams_data.gen_team_memberships(self.guild, self.supervisor_role)
+        self.teams_data.gen_team_memberships(self.guild)
         await self.update_subscribed_messages()
 
     async def on_member_join(self, member: discord.Member) -> None:
@@ -141,22 +140,24 @@ class BotClient(discord.Client):
         guild: discord.Guild = member.guild
         # Create a new channel with that user able to write
         channel: discord.TextChannel = await guild.create_text_channel(
-            f'{CHANNEL_PREFIX}{name}',
+            f"{CHANNEL_PREFIX}{name}",
             category=self.welcome_category,
             reason="User joined server, creating welcome channel.",
             overwrites={
                 guild.default_role: discord.PermissionOverwrite(
-                    read_messages=False,
-                    send_messages=False),
-                member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                    read_messages=False, send_messages=False
+                ),
+                member: discord.PermissionOverwrite(
+                    read_messages=True, send_messages=True
+                ),
+                guild.me: discord.PermissionOverwrite(
+                    read_messages=True, send_messages=True
+                ),
             },
         )
         await channel.send(
             f"""Welcome {member.mention}!
-To gain access, you must use `/join` with the password for your group.
-
-*Don't have the password? it should have been sent with this join link to your team leader*""",
+To gain access, you must use `/join` with the password for your team.""",
         )
         self.logger.info(f"Created welcome channel for '{name}'")
 
@@ -169,22 +170,34 @@ To gain access, you must use `/join` with the password for your group.
 
         for channel in self.welcome_category.channels:
             # If the only user able to see it is the bot, then delete it.
-            if channel.overwrites.keys() == {member.guild.default_role, member.guild.me}:
+            if channel.overwrites.keys() == {
+                member.guild.default_role,
+                member.guild.me,
+            }:
                 await channel.delete()
-                self.logger.info(f"Deleted channel '{channel.name}', because it has no users.")
+                self.logger.info(
+                    f"Deleted channel '{channel.name}', because it has no users."
+                )
 
-    async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
+    async def on_member_update(
+        self, before: discord.Member, after: discord.Member
+    ) -> None:
         """Update subscribed messages when a member's roles change."""
         if isinstance(self.guild, discord.Guild):
-            self.teams_data.gen_team_memberships(self.guild, self.supervisor_role)
+            self.teams_data.gen_team_memberships(self.guild)
 
             await self.update_subscribed_messages()
 
-    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
+    async def on_raw_reaction_add(
+        self, payload: discord.RawReactionActionEvent
+    ) -> None:
         """Remove subscribed messages by reacting with a cross mark."""
-        if payload.emoji.name != '\N{CROSS MARK}':
+        if payload.emoji.name != "\N{CROSS MARK}":
             return
-        if SubscribedMessage(payload.channel_id, payload.message_id) not in self.subscribed_messages:
+        if (
+            SubscribedMessage(payload.channel_id, payload.message_id)
+            not in self.subscribed_messages
+        ):
             # Ignore for messages not in the subscribed list
             return
         if payload.member is None:
@@ -200,7 +213,7 @@ To gain access, you must use `/join` with the password for your group.
 
     def _save_subscribed_messages(self) -> None:
         """Save subscribed messages to file."""
-        with open(SUBSCRIBE_MSG_FILE, 'w') as f:
+        with open(SUBSCRIBE_MSG_FILE, "w") as f:
             json.dump(
                 [x._asdict() for x in self.subscribed_messages],
                 f,
@@ -225,30 +238,34 @@ To gain access, you must use `/join` with the password for your group.
         ```
         """
         try:
-            with open('passwords.json') as f:
+            with open("passwords.json") as f:
                 self.passwords = json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
-            with open('passwords.json', 'w') as f:
-                f.write('{}')
+            with open("passwords.json", "w") as f:
+                f.write("{}")
                 self.passwords = {}
 
     def set_password(self, tla: str, password: str) -> None:
         self.passwords[tla.upper()] = password
-        with open('passwords.json', 'w') as f:
+        with open("passwords.json", "w") as f:
             json.dump(self.passwords, f)
 
     def remove_password(self, tla: str) -> None:
         del self.passwords[tla.upper()]
-        with open('passwords.json', 'w') as f:
+        with open("passwords.json", "w") as f:
             json.dump(self.passwords, f)
 
-    def stats_message(self, members: bool = True, warnings: bool = True, statistics: bool = False) -> str:
+    def stats_message(
+        self, members: bool = True, warnings: bool = True, statistics: bool = False
+    ) -> str:
         """Generate a message string for the given options."""
-        return '\n\n'.join([
-            *([self.teams_data.team_summary()] if members else []),
-            *([self.teams_data.warnings()] if warnings else []),
-            *([self.teams_data.statistics()] if statistics else []),
-        ])
+        return "\n\n".join(
+            [
+                *([self.teams_data.team_summary()] if members else []),
+                *([self.teams_data.warnings()] if warnings else []),
+                *([self.teams_data.statistics()] if statistics else []),
+            ]
+        )
 
     def add_subscribed_message(self, msg: SubscribedMessage) -> None:
         """Add a subscribed message to the subscribed list."""
@@ -258,17 +275,25 @@ To gain access, you must use `/join` with the password for your group.
     async def remove_subscribed_message(self, msg: SubscribedMessage) -> None:
         """Remove a subscribed message from the channel and subscribed list."""
         msg_channel = await self.fetch_channel(msg.channel_id)
-        if not hasattr(msg_channel, 'fetch_message'):
+        if not hasattr(msg_channel, "fetch_message"):
             # ignore for channels that don't support message editing
             return
 
         try:
             message = await msg_channel.fetch_message(msg.message_id)
-            chan_name = message.channel.name if hasattr(message.channel, 'name') else 'unknown channel'
-            self.logger.info(f'Removing message in {chan_name} from {message.author.name}')
+            chan_name = (
+                message.channel.name
+                if hasattr(message.channel, "name")
+                else "unknown channel"
+            )
+            self.logger.info(
+                f"Removing message in {chan_name} from {message.author.name}"
+            )
             await message.delete()  # remove message from discord
         except discord.errors.NotFound:
-            self.logger.info(f"Message #{msg.message_id} doesn't exist, removing from subscribed messages")
+            self.logger.info(
+                f"Message #{msg.message_id} doesn't exist, removing from subscribed messages"
+            )
 
         # remove message from subscription list and save to file
         self.subscribed_messages.remove(msg)
@@ -276,7 +301,7 @@ To gain access, you must use `/join` with the password for your group.
 
     async def update_subscribed_messages(self) -> None:
         """Update all subscribed messages."""
-        self.logger.info('Updating subscribed messages')
+        self.logger.info("Updating subscribed messages")
         for sub_msg in self.subscribed_messages:  # edit all subscribed messages
             message = self.stats_message(
                 sub_msg.members,
@@ -287,7 +312,7 @@ To gain access, you must use `/join` with the password for your group.
 
             try:
                 msg_channel = await self.fetch_channel(sub_msg.channel_id)
-                if not hasattr(msg_channel, 'fetch_message'):
+                if not hasattr(msg_channel, "fetch_message"):
                     # ignore for channels that don't support message editing
                     continue
                 msg = await msg_channel.fetch_message(sub_msg.message_id)
