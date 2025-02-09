@@ -10,6 +10,11 @@ COPY . .
 RUN pip install --no-cache-dir .
 
 RUN chown -R 1000:1000 /usr/src/app
+
+RUN mkdir /app
+RUN chown -R 1000:1000 /app
+WORKDIR /app
+
 USER 1000:1000
 
 CMD [ "python", "-m", "sr.discord_bot" ]
